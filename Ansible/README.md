@@ -2,28 +2,17 @@
 
 ## 📝 Table of Contents
 
-- [About](#about)
-- [Getting Started](#getting_started)
-- [Deployment](#deployment)
-- [Usage](#usage)
-- [Built Using](#built_using)
-- [TODO](../TODO.md)
-- [Contributing](../CONTRIBUTING.md)
-- [Authors](#authors)
-- [Acknowledgments](#acknowledgement)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#Quick_Start)
+- [Installation Components](#installation_components)
+# [Prerequisites](../Requirement/install-ansible.sh)
 
-## 🧐 About <a name = "about"></a>
+## Ansible
+[Install Ansible on Ubuntu](https://docs.ansible.com/ansible/latest/installation_guide/installation_distros.html#installing-ansible-on-ubuntu)
 
-Write about 1-2 paragraphs describing the purpose of your project.
+## Git
 
-## Prerequisites
-
-### Ansible
-[Install Ansible on Ubuntu](https://docs.ansible.com/ansible/latest/installation_guide/installation_distros.html#installing-ansible-on-debian)
-
-### Git
-
-## Quick Start
+# Quick Start
 
 Step 1: Git Clone 
 
@@ -51,7 +40,7 @@ Step 3: Run Ansible Playbook
 ```
 ansible-playbook -i inventory.ini site.yml
 ```
-## Installation Components
+# Installation Components
 
 ### Setup Loadbalancer
 ```
