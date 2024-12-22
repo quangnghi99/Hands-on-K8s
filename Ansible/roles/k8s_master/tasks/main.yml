@@ -1,0 +1,193 @@
+---
+# tasks file for roles/k8s_master
+- name: Update APT package cache
+  apt:
+    update_cache: yes
+- name: Add entries to /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ item.ip }} {{ item.name }}"
+    state: present
+  loop: "{{ hosts_entries }}"
+- name: Turnoff firewall
+  shell: |
+    systemctl stop ufw
+    systemctl disable ufw
+
+# Install Containerd
+- name: Load kernel modules
+  copy:
+    content: |
+      {% for module in kernel_modules %}
+      {{ module }}
+      {% endfor %}
+    dest: /etc/modules-load.d/containerd.conf
+- name: Reload kernel modules
+  shell: modprobe {{ item }}
+  with_items: "{{ kernel_modules }}"
+- name: Configure sysctl for Kubernetes
+  copy:
+    content: |
+      {% for config in sysctl_config %}
+      {{ config }}
+      {% endfor %}
+    dest: /etc/sysctl.d/99-kubernetes-cri.conf
+- name: Reload sysctl
+  command: sysctl --system
+  become: yes
+- name: Install Containerd
+  apt:
+    name: containerd
+    state: present
+    update_cache: yes
+- name: Create containerd configuration directory
+  file:
+    path: /etc/containerd
+    state: directory
+- name: Generate default containerd configuration
+  command: containerd config default
+  register: containerd_default_config
+- name: Write containerd config file
+  copy:
+    content: "{{ containerd_default_config.stdout }}"
+    dest: "/etc/containerd/config.toml"
+- name: Update containerd config to use systemd cgroup
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+- name: Restart containerd service
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: true
+
+#Install kubeadm, kubelet, kubectl
+- name: Install prerequisites for Kubernetes
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gpg
+- name: Add Kubernetes signing key
+  shell: curl -fsSL {{ kubernetes_signing_key_url }} | gpg --dearmor -o {{ kubernetes_keyring_path }}
+  args:
+    creates: "{{ kubernetes_keyring_path }}"
+- name: Add Kubernetes repository
+  copy:
+    content: |
+      deb [signed-by={{ kubernetes_keyring_path }}] {{ kubernetes_repo_url }} /
+    dest: "{{ kubernetes_sources_list }}"
+- name: Update apt package index after adding Kubernetes repo
+  apt:
+    update_cache: yes
+- name: Install Kubernetes components
+  apt:
+    name: "{{ kubernetes_components }}"
+    state: present
+- name: Hold Kubernetes components at the current version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ kubernetes_components }}"
+
+# Init Cluster
+- name: Run kubeadm init
+  shell: |
+    kubeadm init \
+      --control-plane-endpoint={{ kubernetes_control_plane_endpoint }} \
+      --upload-certs \
+      --pod-network-cidr={{ kubernetes_pod_network_cidr }}
+  args:
+    creates: /etc/kubernetes/admin.conf
+  when: inventory_hostname == 'master1'
+
+# Setup kubeconfig for kubectl
+- name: Setup kubeconfig for kubectl
+  shell: |
+    mkdir -p $HOME/.kube
+    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
+  args:
+    creates: $HOME/.kube/config
+  when: inventory_hostname == 'master1'
+
+# Install Helm
+- name: Add Helm GPG key
+  shell: curl https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /usr/share/keyrings/helm.gpg
+  args:
+    creates: /usr/share/keyrings/helm.gpg
+  when: inventory_hostname == 'master1'
+
+- name: Add Helm APT repository
+  shell: echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | tee /etc/apt/sources.list.d/helm-stable-debian.list
+  args:
+    creates: /etc/apt/sources.list.d/helm-stable-debian.list
+  when: inventory_hostname == 'master1'
+- name: Update APT cache
+  apt:
+    update_cache: yes
+  when: inventory_hostname == 'master1'
+- name: Install Helm
+  apt:
+    name: helm
+    state: present
+  when: inventory_hostname == 'master1'
+
+# Install CNI 
+- name: Add Cilium Helm repository
+  shell: helm repo add cilium https://helm.cilium.io/
+  register: helm_repo_add
+  changed_when: "'repository has been added' in helm_repo_add.stdout"
+  when: inventory_hostname == 'master1'
+
+- name: Update Helm repositories
+  shell: helm repo update
+  register: helm_repo_update
+  when: inventory_hostname == 'master1'
+
+- name: Check if Cilium Helm chart is installed
+  shell: helm ls -n kube-system | grep cilium
+  register: cilium_helm_check
+  ignore_errors: true
+  when: inventory_hostname == 'master1'
+
+- name: Install Cilium Helm chart
+  shell: helm install cilium cilium/cilium  --set clusterPool.podCIDRs[0]=10.0.0.0/8 --namespace kube-system
+  register: helm_install_cilium
+  when: inventory_hostname == 'master1' and cilium_helm_check.rc != 0
+
+# Add Master node
+- name: Generate new token
+  shell: kubeadm token create
+  register: token_key
+  when: inventory_hostname == 'master1'
+
+- name: Generate discovery token ca cert hash
+  shell: |
+    openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | \
+    openssl dgst -sha256 -hex | sed 's/^.* //'
+  register: ca_cert_hash
+  when: inventory_hostname == 'master1'
+
+- name: Certificate Key
+  shell: kubeadm init phase upload-certs --upload-certs
+  register: upload_certificate_key
+  when: inventory_hostname == 'master1'
+
+- name: Make Certificate Global
+  set_fact:
+    token: "{{ token_key.stdout_lines[0] }}"
+    cert_hash: "{{ ca_cert_hash.stdout_lines[0] }}"
+    certificate_key: "{{ upload_certificate_key.stdout_lines[2] }}"
+  when: inventory_hostname == 'master1'
+
+- name: Join other master to the cluster
+  shell: |
+    kubeadm join {{ kubernetes_control_plane_endpoint }} --token {{ hostvars['master1']['token'] }} --discovery-token-ca-cert-hash sha256:{{ hostvars['master1']['cert_hash'] }} --control-plane --certificate-key {{ hostvars['master1']['certificate_key'] }}
+  when: inventory_hostname != 'master1'
+  args:
+    creates: /etc/kubernetes/kubelet.conf

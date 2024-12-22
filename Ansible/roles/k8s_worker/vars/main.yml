@@ -1,0 +1,23 @@
+---
+# vars file for roles/k8s_worker
+kernel_modules:
+  - overlay
+  - br_netfilter
+
+#sysctl.d configurations
+sysctl_config:
+  - "net.bridge.bridge-nf-call-iptables  = 1"
+  - "net.ipv4.ip_forward                 = 1"
+  - "net.bridge.bridge-nf-call-ip6tables = 1"
+# /etc/hosts
+hosts_entries:
+  - { ip: "192.168.0.10", name: "master1" }
+  - { ip: "192.168.0.20", name: "master2" }
+  - { ip: "192.168.0.30", name: "master3" }
+  - { ip: "192.168.0.40", name: "apiserver.lb" }
+  - { ip: "192.168.10.10", name: "worker1" }
+  - { ip: "192.168.10.20", name: "worker2" }
+  - { ip: "192.168.10.30", name: "master3" }
+
+kubernetes_control_plane_endpoint: "apiserver.lb:6443"
+kubernetes_pod_network_cidr: "10.0.0.0/8"

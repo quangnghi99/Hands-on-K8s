@@ -1,0 +1,102 @@
+---
+# tasks file for roles/k8s_worker
+- name: Update APT package cache
+  apt:
+    update_cache: yes
+- name: Add entries to /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ item.ip }} {{ item.name }}"
+    state: present
+  loop: "{{ hosts_entries }}"
+- name: Turnoff firewall
+  shell: |
+    systemctl stop ufw
+    systemctl disable ufw
+
+# Install Containerd
+- name: Load kernel modules
+  copy:
+    content: |
+      {% for module in kernel_modules %}
+      {{ module }}
+      {% endfor %}
+    dest: /etc/modules-load.d/containerd.conf
+- name: Reload kernel modules
+  shell: modprobe {{ item }}
+  with_items: "{{ kernel_modules }}"
+- name: Configure sysctl for Kubernetes
+  copy:
+    content: |
+      {% for config in sysctl_config %}
+      {{ config }}
+      {% endfor %}
+    dest: /etc/sysctl.d/99-kubernetes-cri.conf
+- name: Reload sysctl
+  command: sysctl --system
+  become: yes
+- name: Install Containerd
+  apt:
+    name: containerd
+    state: present
+    update_cache: yes
+- name: Create containerd configuration directory
+  file:
+    path: /etc/containerd
+    state: directory
+- name: Generate default containerd configuration
+  command: containerd config default
+  register: containerd_default_config
+- name: Write containerd config file
+  copy:
+    content: "{{ containerd_default_config.stdout }}"
+    dest: "/etc/containerd/config.toml"
+- name: Update containerd config to use systemd cgroup
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+- name: Restart containerd service
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: true
+
+#Install kubeadm, kubelet, kubectl
+- name: Install prerequisites for Kubernetes
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gpg
+- name: Add Kubernetes signing key
+  shell: curl -fsSL {{ kubernetes_signing_key_url }} | gpg --dearmor -o {{ kubernetes_keyring_path }}
+  args:
+    creates: "{{ kubernetes_keyring_path }}"
+- name: Add Kubernetes repository
+  copy:
+    content: |
+      deb [signed-by={{ kubernetes_keyring_path }}] {{ kubernetes_repo_url }} /
+    dest: "{{ kubernetes_sources_list }}"
+- name: Update apt package index after adding Kubernetes repo
+  apt:
+    update_cache: yes
+- name: Install Kubernetes components
+  apt:
+    name: "{{ kubernetes_components }}"
+    state: present
+- name: Hold Kubernetes components at the current version
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ kubernetes_components }}"
+
+# Add Worker node
+- name: Join worker to the cluster
+  shell: |
+    kubeadm join {{ kubernetes_control_plane_endpoint }} --token {{ hostvars['master1']['token'] }} --discovery-token-ca-cert-hash sha256:{{ hostvars['master1']['cert_hash'] }}
+  args:
+    creates: /etc/kubernetes/kubelet.conf
