@@ -5,7 +5,7 @@
 - [Prerequisites](#prerequisites)
 - [Quick Start](#Quick_Start)
 - [Installation Components](#installation_components)
-# [Prerequisites](../Requirement/install-ansible.sh)
+# [Prerequisites](../Requirement)
 
 ## Ansible
 [Install Ansible on Ubuntu](https://docs.ansible.com/ansible/latest/installation_guide/installation_distros.html#installing-ansible-on-ubuntu)
@@ -42,7 +42,7 @@ ansible-playbook -i inventory.ini site.yml
 ```
 # Installation Components
 
-### Setup Loadbalancer
+## Setup Loadbalancer
 ```
 sudo apt update
 sudo apt install nginx
@@ -62,7 +62,6 @@ stream {
     }
 server {
         listen 6443;
-        listen 443;
         proxy_pass kubernetes;
     }
 }
@@ -72,9 +71,12 @@ Add /etc/nginx/nginx.conf
 ```
 include /etc/nginx/k8s-lb.d/*
 ```
+Reload Nginx
+```
+nginx -s reload
+```
 
-
-### Install Containerd
+## Install Containerd
 ```
 cat <<EOF | sudo tee /etc/modules-load.d/containerd.conf
 overlay
@@ -95,7 +97,7 @@ sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.t
 systemctl restart containerd
 ```
 
-### Install kubeadm, kubelet, kubectl
+## Install kubeadm, kubelet, kubectl
 ```
 sudo apt-get update
 sudo apt-get install -y apt-transport-https ca-certificates curl
@@ -106,22 +108,22 @@ sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
 
-### Init Cluster
+## Init Cluster
 ```
 kubeadm init --control-plane-endpoint=apisever.lb:6443 --upload-certs --pod-network-cidr=10.0.0.0/8
 ```
-### Copy kubeconfig
+## Copy kubeconfig
 ```
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
-### Install CNI
+## Install CNI
 ```
 helm repo add cilium https://helm.cilium.io/
 helm install cilium cilium/cilium  --set clusterPool.podCIDRs[0]=192.168.0.0/16 --namespace kube-system
 ```
-### Add Node
+## Add Node
 Create token
 ```
 kubeadm token create
@@ -135,11 +137,11 @@ Upload Certificate
 ```
 kubeadm init phase upload-certs --upload-certs
 ```
-#### Add Master Node
+### Add Master Node
 ```
 kubeadm join apiserver.lb:6443 --token [token]--discovery-token-ca-cert-hash sha256:[cert_hash] --control-plane --certificate-key [Certificate]
 ```
-#### Add Worker Node
+### Add Worker Node
 ```
 kubeadm join apiserver.lb:6443 --token [token]--discovery-token-ca-cert-hash sha256:[cert_hash]
 ```

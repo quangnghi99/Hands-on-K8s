@@ -1,0 +1,34 @@
+---
+# tasks file for roles/k8s_lb
+- name: Update APT cache
+  apt:
+    update_cache: yes
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+- name: Create k8s-lb.d
+  file:
+    path: /etc/nginx/k8s-lb.d
+    state: directory
+    mode: '0755'
+- name: Configure /etc/nginx/k8s-lb.d/apiserver.conf
+  template:
+    src: apiserver.conf.j2
+    dest: /etc/nginx/apiserver.conf
+  mode: '0644'
+
+- name: Add include statement to /etc/nginx/nginx.conf
+  lineinfile:
+    path: /etc/nginx/nginx.conf
+    regexp: '^include /etc/nginx/k8s-lb\.d/\*;$'
+    line: 'include /etc/nginx/k8s-lb.d/*;'
+    state: present
+
+- name: Test Nginx configuration
+  shell: nginx -t
+  register: nginx_test_result
+  failed_when: "'successful' not in nginx_test_result.stdout"
+
+- name: Reload Nginx
+  shell: nginx -s reload

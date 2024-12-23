@@ -1,5 +1,11 @@
 ---
 - name: Setup Kubernetes Master Node
+  hosts: loadbalancer
+  become: true
+  roles:
+    - k8s_lb
+
+- name: Setup Kubernetes Master Node
   hosts: master
   become: true
   roles:
