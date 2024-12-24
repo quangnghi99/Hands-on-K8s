@@ -1,2 +1,7 @@
 ---
 # defaults file for roles/k8s_lb
+kubernetes_masters: "{{ hostvars['localhost']['kubernetes_masters'] }}"
+nginx_lb_port: 6443
+
+# /etc/hosts
+hosts_entries: "{{ hostvars['localhost']['hosts_entries'] }}"

@@ -3,20 +3,34 @@
 - name: Update APT cache
   apt:
     update_cache: yes
+
+- name: Add entries to /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "{{ item.ip }} {{ item.name }}"
+    state: present
+  loop: "{{ hosts_entries }}"
+
+- name: Turnoff firewall
+  shell: |
+    systemctl stop ufw
+    systemctl disable ufw
+
 - name: Install Nginx
   apt:
     name: nginx
     state: present
+
 - name: Create k8s-lb.d
   file:
     path: /etc/nginx/k8s-lb.d
     state: directory
-    mode: '0755'
+    mode: 0755
+
 - name: Configure /etc/nginx/k8s-lb.d/apiserver.conf
-  template:
+  ansible.builtin.template:
     src: apiserver.conf.j2
-    dest: /etc/nginx/apiserver.conf
-  mode: '0644'
+    dest: /etc/nginx/k8s-lb.d/apiserver.conf
 
 - name: Add include statement to /etc/nginx/nginx.conf
   lineinfile:
@@ -28,7 +42,8 @@
 - name: Test Nginx configuration
   shell: nginx -t
   register: nginx_test_result
-  failed_when: "'successful' not in nginx_test_result.stdout"
+  failed_when: "'test is successful' not in nginx_test_result.stderr"
+  changed_when: false
 
 - name: Reload Nginx
   shell: nginx -s reload

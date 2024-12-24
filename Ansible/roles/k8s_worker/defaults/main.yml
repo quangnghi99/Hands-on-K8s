@@ -1,11 +1,5 @@
 ---
 # defaults file for roles/k8s_worker
 kubernetes_version: "v1.30"
-kubernetes_repo_url: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version }}/deb/"
-kubernetes_signing_key_url: "https://pkgs.k8s.io/core:/stable:/{{ kubernetes_version }}/deb/Release.key"
-kubernetes_keyring_path: "/etc/apt/keyrings/kubernetes-apt-keyring.gpg"
-kubernetes_sources_list: "/etc/apt/sources.list.d/kubernetes.list"
-kubernetes_components:
-  - kubelet
-  - kubeadm
-  - kubectl
+
+hosts_entries: "{{ hostvars['localhost']['hosts_entries'] }}"

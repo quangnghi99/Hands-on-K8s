@@ -1,4 +1,35 @@
 ---
+- name: Generate variabler from inventory
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Create full hosts_entries (on localhost)
+      set_fact:
+        hosts_entries: >-
+          {{
+            (hosts_entries | default([])) + 
+            [{'ip': hostvars[item].ansible_host | default('127.0.0.1'), 'name': item}]
+          }}
+      loop: "{{ groups['all'] }}"
+      run_once: yes
+
+    - name: Set kubernetes_masters from inventory group 'master'
+      set_fact:
+        kubernetes_masters: "{{ groups['master'] }}"
+
+    - name: Display the full hosts_entries variable (for debugging)
+      debug:
+        var: hosts_entries
+      run_once: yes
+
+- name: Change Hostname
+  hosts: all
+  become: true
+  tasks:
+    - name: Set hostname for each server
+      hostname:
+        name: "{{ inventory_hostname }}"
+
 - name: Setup Kubernetes Master Node
   hosts: loadbalancer
   become: true
@@ -16,3 +47,13 @@
   become: true
   roles:
     - k8s_worker
+
+- name: Generate variabler from inventory
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Connect to K8s Cluster
+      shell: |
+        mkdir -p $HOME/.kube
+        scp -i /root/K8s.pem master1:~/.kube/config  $HOME/.kube/
+        sudo chown $(id -u):$(id -g) $HOME/.kube/config
