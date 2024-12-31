@@ -51,7 +51,7 @@ cd /etc/nginx/k8s-lb.d
 vi apiserver.conf
 ```
 
-Configure /etc/nginx/apiserver.conf
+Configure /etc/nginx/k8s-lb.d/apiserver.conf
 
 ```
 stream {

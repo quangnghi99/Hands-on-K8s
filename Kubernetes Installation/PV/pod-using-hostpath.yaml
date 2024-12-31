@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-using-hostpath
+spec:
+  containers:
+    - name: app
+      image: nginx # Bạn có thể thay đổi thành image khác nếu cần
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html" # Đường dẫn trong container
+          name: storage
+  volumes:
+    - name: storage
+      persistentVolumeClaim:
+        claimName: pvc-hostpath
