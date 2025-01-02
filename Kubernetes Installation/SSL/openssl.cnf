@@ -1,0 +1,21 @@
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[req_distinguished_name]
+countryName = VN
+countryName_default = VN
+stateOrProvinceName = HN
+stateOrProvinceName_default = HN
+localityName = HN
+localityName_default = HN
+organizationalUnitName = Nghinq_K8s
+organizationalUnitName_default = Nghinq_K8s
+commonName = *.myownspace.online
+commonName_max = 64
+[ v3_req ]
+# Extensions to add to a certificate request
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName = @alt_names
+[alt_names]
+DNS.1 = *.myownspace.online
